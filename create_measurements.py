@@ -419,22 +419,17 @@ weather_station_list = [("Abha", 18.0),
 
 WS_LEN = len(weather_station_list)
 
-
 def fill_rows(count):
     print(f"Writing {int(count)} rows to measurements.txt ")
-
     start = time.time()
 
     with open("measurements.txt", "w") as f_writer:
         for _ in range(count):
-            # f_writer.writelines([f"{w[0]};{w[1]}\n" for w in weather_station_list])
             ws = weather_station_list[random.randint(0,WS_LEN-1)]
-            line = f"{ws[0]};{round(random.gauss(float(ws[1]), 10) * 10.0) / 10.0}\n"
-            f_writer.write(line)
+            f_writer.write(f"{ws[0]};{round(random.gauss(float(ws[1]), 10) * 10.0) / 10.0}\n")
 
     end = time.time()
     print(f"finished in {end-start} seconds")
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
