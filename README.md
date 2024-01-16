@@ -29,3 +29,8 @@ These results are from
 - Processing the file as chunks, each chunk with 100 million lines. Took 319 seconds.
 - Used multi-processing to process the chunks concurrently. Aggregation remains same - using python `dict`.
 - Instead of one process reading line by line, multiple processes read the same file line by line. Chunk results are again aggregated using python `dict`
+---
+#### Attempt 3
+- Better way of splitting the file based on size in bytes not based on number of lines. Removed extra steps to advance the file-stream position in file. Time down to 168 seconds.
+- Split the file in 8 (or max cpu cores) parts of size `total_file_size / max_cpu_cores` bytes. Then dvance the file-stream position to next `\n` character.
+- This is to make sure that `readline()` always yields a complete line without breaks in between.
