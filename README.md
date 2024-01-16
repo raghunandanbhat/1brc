@@ -13,7 +13,7 @@ This is me attempting [One Billion Row Challenge](https://github.com/gunnarmorli
 ---
 
 ### Results
-These results are from 
+Results from running the program on M2 MacBook Air(16GB RAM with 8 core CPU)
 #### Attempt 1
 - No tricks, just basic python. It took 869.78 seconds and it's painful to look at.
 - Read the file line by line and start aggregating the values in a python `dict`
