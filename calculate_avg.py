@@ -1,10 +1,11 @@
 import os
 import io
 import sys
-import time
+import mmap
 import concurrent.futures
 
 INPUT_FILE_PATH = "./measurements.txt"
+ALLOC_GRAN = mmap.ALLOCATIONGRANULARITY 
 
 def get_chunk_boundaries():
     f_size = os.stat(INPUT_FILE_PATH).st_size
@@ -14,9 +15,6 @@ def get_chunk_boundaries():
         start_pos = 0
         end_pos = start_pos + size_per_core
         while end_pos < f_size:
-            if not f.seekable():
-                print("can't seek file")
-                sys.exit(1)
             if (start_pos + size_per_core) < f_size:
                 f.seek(size_per_core, os.SEEK_CUR)
                 byte_char = f.read(1)
@@ -27,65 +25,60 @@ def get_chunk_boundaries():
             else:
                 end_pos = f_size
             boundaries.append((start_pos, end_pos))
-            print(f"start: {start_pos}, end: {end_pos}, size-diff: {end_pos-start_pos}")
+            # print(f"start: {start_pos}, end: {end_pos}, size-diff: {end_pos-start_pos}")
             start_pos = end_pos
     return boundaries
 
 def process_chunk(chunk_start, chunk_end):
     ws_dict = {}
-    chunk_size = chunk_end - chunk_start
-    bytes_read = 0
-    line_count = 0
-    with open(INPUT_FILE_PATH, 'r') as f_reader:
-        if not f_reader.seekable():
-            print("Can't seek file")
-            sys.exit(1)
-        f_reader.seek(chunk_start)
-        for line in f_reader:
-            # stop if bytes read is more than chunk size
-            bytes_read += len(line)
-            if bytes_read > chunk_size:
-                break;
-            sep_index = line.index(';')
-            city, temp = str(line[:sep_index]), float(line[sep_index+1:-1])
+    aligned_offset = (chunk_start // ALLOC_GRAN) * ALLOC_GRAN
+    aligned_seek_pos = abs(aligned_offset-chunk_start)
+    aligned_length = aligned_seek_pos + chunk_end - chunk_start
+    with open(INPUT_FILE_PATH, 'rb') as f_reader:
+        mm = mmap.mmap(fileno=f_reader.fileno(), length=aligned_length, offset=aligned_offset, flags=mmap.MAP_PRIVATE)
+        mm.seek(aligned_seek_pos)
+        line = mm.readline()
+        while line != b'':
+            city, temp = line.split(b';')
+            temp = float(temp)
             try:
-                    ws_dict[city]['min'] = min(ws_dict[city]['min'], temp)
-                    ws_dict[city]['max'] = max(ws_dict[city]['max'], temp)
-                    ws_dict[city]['sum'] += temp
-                    ws_dict[city]['count'] += 1
+                # min temp
+                if ws_dict[city][0] > temp: 
+                    ws_dict[city][0] = temp
+                # max temp
+                if ws_dict[city][1] < temp: 
+                    ws_dict[city][1] = temp
+                ws_dict[city][2] += temp
+                ws_dict[city][3] += 1
             except:
-                ws_dict[city] = {'min': temp, 'max': temp, 'sum': temp, 'count': 1}
-            line_count += 1
-        print(f"processed {line_count} lines in range ({chunk_start}, {chunk_end})")
+                ws_dict[city] = [temp, temp, temp, 1]
+            line = mm.readline()
+        mm.close()
     return ws_dict
 
 def launch():
-    print("launching processes on chunks...")
-    start = time.time()
     ws_dict = {}
     chunk_boundaries = get_chunk_boundaries()
-    with concurrent.futures.ProcessPoolExecutor() as executor:
+    with concurrent.futures.ProcessPoolExecutor(max_workers=os.cpu_count()) as executor:
         chunk_result_futures = [executor.submit(process_chunk, start, end) for start, end in chunk_boundaries]
         for future in concurrent.futures.as_completed(chunk_result_futures):
             try:
                 chunk_result = future.result()
             except Exception as excpt:
-                print("Exception: {0}".format(excpt))
+                print("Exception in reading result from future: {0}".format(excpt))
             else:
                 for city, temps in chunk_result.items():
                     try:
-                        ws_dict[city]['min'] = min(ws_dict[city]['min'], temps['min'])
-                        ws_dict[city]['max'] = max(ws_dict[city]['max'], temps['min'])
-                        ws_dict[city]['sum'] += temps['sum']
-                        ws_dict[city]['count'] += temps['count']
+                        if ws_dict[city][0] > temps[0]:
+                            ws_dict[city][0] = temps[0]
+                        if ws_dict[city][1] < temps[1]:
+                            ws_dict[city][1] = temps[1]
+                        ws_dict[city][2] += temps[2]
+                        ws_dict[city][3] += temps[3]
                     except:
-                        ws_dict[city] = {'min': temps['min'], 'max': temps['max'], 'sum': temps['sum'], 'count': temps['count']}
+                        ws_dict[city] = [temps[0], temps[1], temps[2], temps[3]]
 
-    print(sorted(list(map(lambda city,temps: (city, f"{temps['min']}/{round(temps['sum']/temps['count'])*10.0/10.0}/{temps['max']}"), ws_dict.keys(), ws_dict.values())), key=lambda ws:ws[0]))
-    end = time.time()
-    print("\n---------------------***---------------------\n")
-    print("         time elapsed :", end-start)
-    print("\n---------------------***---------------------")
+    print(sorted([(city.decode(), f"{temps[0]}/{round(temps[2]/temps[3], 2)}/{temps[1]}") for city,temps in ws_dict.items()], key=lambda ws:ws[0]))
 
 if __name__ == "__main__":
 

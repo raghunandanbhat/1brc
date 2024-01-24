@@ -17,7 +17,8 @@ Results from running the program on M2 MacBook Air(16GB RAM with 8 core CPU)
 
 | Attempts | Time(sec) |
 | -------- | --------  |
-|     3    |   168     |
+|     4    |    64     |
+|     3    |   162     |
 |     2    |   319     |
 |     1    |   870     |    
 
@@ -30,7 +31,7 @@ Results from running the program on M2 MacBook Air(16GB RAM with 8 core CPU)
     for line in f_reader:
       # aggregate values here
   ```
-- This avoids loading the entire file into the memory at once.
+- This avoids loading the entire file into the memory all at once.
 ---
 #### Attempt 2
 - Processing the file as chunks, each chunk with 100 million lines. Took 319 seconds.
@@ -38,6 +39,11 @@ Results from running the program on M2 MacBook Air(16GB RAM with 8 core CPU)
 - Instead of one process reading line by line, multiple processes read the same file line by line. Chunk results are again aggregated using python `dict`
 ---
 #### Attempt 3
-- Better way of splitting the file based on size in bytes not based on number of lines. Removed extra steps to advance the file-stream position in file. Time down to 168 seconds.
+- Better way of splitting the file based on size in bytes not based on number of lines. Removed extra steps to advance the file-stream position in file. Time down to 162 seconds.
 - Split the file in 8 (or max cpu cores) parts of size `total_file_size / max_cpu_cores` bytes. Then dvance the file-stream position to next `\n` character.
 - This is to make sure that `readline()` always yields a complete line without breaks in between.
+---
+#### Attempt 4
+- Memory mapped chunks, then read line by line. Replace the `min()` and `max()` functions with basic `if a > b` checks. Finished in 76 seconds.
+- Values in the `dict` were also a `dict`, replaced them with a `list` and shaved off another ~10 seconds. Time down to 64 seconds.
+- Used 16 worker processes instead of default value- `os.cpu_count()` (or 8 in my case).
